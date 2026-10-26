@@ -1,13 +1,17 @@
 {
   "files": {
-    "main.css": "/shenlun-app/static/css/main.06e0309a.css",
-    "main.js": "/shenlun-app/static/js/main.7a55c1a8.js",
+    "main.css": "/shenlun-app/static/css/main.cfc41d3d.css",
+    "main.js": "/shenlun-app/static/js/main.c1bd2b00.js",
+    "static/js/977.887bd2ff.chunk.js": "/shenlun-app/static/js/977.887bd2ff.chunk.js",
+    "static/js/455.db16f4cf.chunk.js": "/shenlun-app/static/js/455.db16f4cf.chunk.js",
     "index.html": "/shenlun-app/index.html",
-    "main.06e0309a.css.map": "/shenlun-app/static/css/main.06e0309a.css.map",
-    "main.7a55c1a8.js.map": "/shenlun-app/static/js/main.7a55c1a8.js.map"
+    "main.cfc41d3d.css.map": "/shenlun-app/static/css/main.cfc41d3d.css.map",
+    "main.c1bd2b00.js.map": "/shenlun-app/static/js/main.c1bd2b00.js.map",
+    "977.887bd2ff.chunk.js.map": "/shenlun-app/static/js/977.887bd2ff.chunk.js.map",
+    "455.db16f4cf.chunk.js.map": "/shenlun-app/static/js/455.db16f4cf.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.06e0309a.css",
-    "static/js/main.7a55c1a8.js"
+    "static/css/main.cfc41d3d.css",
+    "static/js/main.c1bd2b00.js"
   ]
 }
