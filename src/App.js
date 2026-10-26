@@ -3,12 +3,14 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
+  HeightRule,
   Packer,
   Paragraph,
   Table,
   TableCell,
   TableRow,
   TextRun,
+  TableLayoutType,
   VerticalAlign,
   WidthType,
 } from "docx";
@@ -300,16 +302,18 @@ const App = () => {
       const tableRows = grid.map(
         (row, rowIndex) =>
           new TableRow({
+            height: { value: 400, rule: HeightRule.EXACTLY },
             children: row.map((cell, colIndex) => {
               const marker = getCellMarker(rowIndex, colIndex);
               const children = [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
+                  spacing: { before: 0, after: 0, line: 180 },
                   children: [
                     new TextRun({
                       text: cell || " ",
                       font: "Microsoft YaHei",
-                      size: 22,
+                      size: 18,
                     }),
                   ],
                 }),
@@ -319,12 +323,12 @@ const App = () => {
                 children.push(
                   new Paragraph({
                     alignment: AlignmentType.RIGHT,
-                    spacing: { before: 0, after: 0 },
+                    spacing: { before: 0, after: 0, line: 80 },
                     children: [
                       new TextRun({
                         text: String(marker),
                         font: "Arial",
-                        size: 10,
+                        size: 8,
                         color: "666666",
                       }),
                     ],
@@ -333,7 +337,8 @@ const App = () => {
               }
 
               return new TableCell({
-                width: { size: 360, type: WidthType.DXA },
+                width: { size: 400, type: WidthType.DXA },
+                margins: { top: 0, bottom: 0, left: 0, right: 0 },
                 verticalAlign: VerticalAlign.CENTER,
                 borders: {
                   top: border,
@@ -352,13 +357,15 @@ const App = () => {
           {
             properties: {
               page: {
+                size: { width: 11906, height: 16838 },
                 margin: { top: 720, right: 720, bottom: 720, left: 720 },
               },
             },
             children: [
               new Table({
-                width: { size: 100, type: WidthType.PERCENTAGE },
-                columnWidths: Array(cols).fill(360),
+                width: { size: 10000, type: WidthType.DXA },
+                layout: TableLayoutType.FIXED,
+                columnWidths: Array(cols).fill(400),
                 rows: tableRows,
               }),
             ],
@@ -372,29 +379,6 @@ const App = () => {
     } catch {
       setSaveMessage("Word 下载失败，请改用 PDF 或下载文本");
     }
-  };
-
-  const exportWebWord = (filename) => {
-    const escapeHtml = (value) =>
-      value
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    const cellHtml = (cell, rowIndex, colIndex) => {
-      const marker = getCellMarker(rowIndex, colIndex);
-      const escapedCell = escapeHtml(cell);
-      return `<td style="width:30px;height:30px;padding:0;border:1px solid red;text-align:center;vertical-align:middle;font-family:'Microsoft YaHei',sans-serif;font-size:16pt;position:relative;"><div style="height:19px;line-height:19px;">${escapedCell || "&nbsp;"}</div>${marker ? `<div style="height:9px;line-height:9px;text-align:right;padding-right:1px;color:#777;font:7pt Arial,sans-serif;">${marker}</div>` : ""}</td>`;
-    };
-    const rowsHtml = grid
-      .map(
-        (row, rowIndex) =>
-          `<tr>${row.map((cell, colIndex) => cellHtml(cell, rowIndex, colIndex)).join("")}</tr>`
-      )
-      .join("");
-    const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>申论答题纸</title><style>@page{size:A4 portrait;margin:10mm;}body{margin:0;font-family:'Microsoft YaHei',sans-serif;}table{border-collapse:collapse;table-layout:fixed;}td{mso-border-alt:solid red .5pt;}</style></head><body><table style="width:750px;border-collapse:collapse;table-layout:fixed;">${rowsHtml}</table></body></html>`;
-    downloadBlob(new Blob(["\ufeff", html], { type: "application/msword" }), filename);
-    setSaveMessage("Word 网页文稿已下载");
   };
 
   const createPdfExportElement = () => {
@@ -437,8 +421,9 @@ const App = () => {
         logging: false,
       });
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageWidth = 210;
-      const pageHeight = 297;
+      const pageMargin = 10;
+      const pageWidth = 210 - pageMargin * 2;
+      const pageHeight = 297 - pageMargin * 2;
       const pageHeightPx = Math.floor((canvas.width * pageHeight) / pageWidth);
 
       for (let offset = 0, pageIndex = 0; offset < canvas.height; offset += pageHeightPx, pageIndex += 1) {
@@ -461,8 +446,8 @@ const App = () => {
         pdf.addImage(
           pageCanvas.toDataURL("image/png"),
           "PNG",
-          0,
-          0,
+          pageMargin,
+          pageMargin,
           pageWidth,
           (sliceHeight * pageWidth) / canvas.width
         );
@@ -495,8 +480,6 @@ const App = () => {
 
     if (type === "word") {
       exportWord(filename);
-    } else if (type === "web-word") {
-      exportWebWord(filename);
     } else {
       void exportPdf(filename);
     }
@@ -563,9 +546,6 @@ const App = () => {
         </button>
         <button onClick={() => openFilenameDialog("word", "docx")}>
           下载 Word
-        </button>
-        <button onClick={() => openFilenameDialog("web-word", "doc")}>
-          下载 Word 网页文稿
         </button>
         <button onClick={() => openFilenameDialog("pdf", "pdf")}>
           下载 PDF
