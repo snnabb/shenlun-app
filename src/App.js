@@ -73,6 +73,9 @@ const App = () => {
       composingCellRef.current === e.currentTarget ||
       e.nativeEvent.isComposing
     ) {
+      // 这是受控 input：组合期间也要保留临时值，否则 React 会把输入框
+      // 恢复成旧的空值，导致 compositionend 拿不到最终字符。
+      updateGrid(row, col, value);
       return;
     }
 
