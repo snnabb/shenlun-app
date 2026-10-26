@@ -9,9 +9,8 @@ const App = () => {
   );
 
   // 中文输入法可能一次提交多个字符。用元素引用跟踪组合输入，避免
-  // 在 composition 期间提前提交，也避免 compositionend 后重复提交。
+  // 在 composition 期间提前提交。
   const composingCellRef = useRef(null);
-  const lastCompositionRef = useRef(null);
 
   const isValidInput = (value) =>
     /^[\u4e00-\u9fa5，！？；。：、‘’“”【】（）]+$/.test(value) ||
@@ -77,16 +76,6 @@ const App = () => {
       return;
     }
 
-    // 某些浏览器会在 compositionend 后再触发一次 onChange。
-    if (lastCompositionRef.current) {
-      const isDuplicateCompositionChange =
-        lastCompositionRef.current === e.currentTarget;
-      lastCompositionRef.current = null;
-      if (isDuplicateCompositionChange) {
-        return;
-      }
-    }
-
     commitText(value, row, col);
   };
 
@@ -96,7 +85,6 @@ const App = () => {
 
   const handleCompositionEnd = (e, row, col) => {
     composingCellRef.current = null;
-    lastCompositionRef.current = e.currentTarget;
     commitText(e.currentTarget.value, row, col);
   };
 
