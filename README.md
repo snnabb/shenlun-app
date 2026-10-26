@@ -7,8 +7,6 @@
 ![申论](./shenlun.png)
 
 ## 在线体验
-[![pages-build-deployment](https://github.com/surzia/shenlun-app/actions/workflows/pages/pages-build-deployment/badge.svg)](https://surzia.github.io/shenlun-app/)
+[在线打开申论答题纸](https://snnabb.github.io/shenlun-app/)
 
-[![Netlify Status](https://api.netlify.com/api/v1/badges/50e312f5-24ee-40de-84db-14363488f4cc/deploy-status)](https://shenlun.netlify.app/)
-
-[![Deploy with Vercel](https://vercel.com/button)](https://shenlun-app.vercel.app/)
+源代码：[snnabb/shenlun-app](https://github.com/snnabb/shenlun-app)

@@ -1,4 +1,17 @@
 import React, { useRef, useState } from "react";
+import {
+  AlignmentType,
+  BorderStyle,
+  Document,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun,
+  VerticalAlign,
+  WidthType,
+} from "docx";
 import "./App.css";
 
 const COLS = 25;
@@ -6,6 +19,32 @@ const DRAFT_STORAGE_KEY = "shenlun-app-draft-v1";
 
 const createEmptyGrid = (rowCount) =>
   Array.from({ length: rowCount }, () => Array(COLS).fill(""));
+
+const getCellMarker = (rowIndex, colIndex) => {
+  const charCount = rowIndex * COLS + colIndex + 1;
+  return charCount % 100 === 0 ? charCount : null;
+};
+
+const getDefaultFilename = () => {
+  const date = new Date().toLocaleDateString("zh-CN").replace(/\//g, "-");
+  return `申论答题-${date}`;
+};
+
+const sanitizeFilename = (input, extension) => {
+  const safeName = input.trim().replace(/[\\/:*?"<>|]/g, "_");
+  return `${safeName || getDefaultFilename()}.${extension}`;
+};
+
+const downloadBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
 const loadDraft = () => {
   const fallback = { rows: 8, grid: createEmptyGrid(8), restored: false };
@@ -41,6 +80,8 @@ const App = () => {
   const [saveMessage, setSaveMessage] = useState(
     initialDraft.restored ? "已恢复上次保存的草稿" : ""
   );
+  const [filenameDialog, setFilenameDialog] = useState(null);
+  const [filenameInput, setFilenameInput] = useState("");
 
   // 中文输入法可能一次提交多个字符。用元素引用跟踪组合输入，避免
   // 在 composition 期间提前提交。
@@ -234,26 +275,124 @@ const App = () => {
     }
   };
 
-  const downloadText = () => {
-    const text = getGridText();
-    if (!text.replace(/\n/g, "")) {
-      setSaveMessage("当前没有可保存的内容");
-      return;
-    }
+  const exportWord = async (filename) => {
+    try {
+      const border = {
+        style: BorderStyle.SINGLE,
+        size: 4,
+        color: "FF0000",
+      };
+      const tableRows = grid.map(
+        (row, rowIndex) =>
+          new TableRow({
+            children: row.map((cell, colIndex) => {
+              const marker = getCellMarker(rowIndex, colIndex);
+              const children = [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({
+                      text: cell || " ",
+                      font: "Microsoft YaHei",
+                      size: 22,
+                    }),
+                  ],
+                }),
+              ];
 
-    const blob = new Blob([`${text}\n`], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const date = new Date().toLocaleDateString("zh-CN").replace(/\//g, "-");
-    link.href = url;
-    link.download = `申论答题-${date}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    setSaveMessage("文本已下载");
+              if (marker) {
+                children.push(
+                  new Paragraph({
+                    alignment: AlignmentType.RIGHT,
+                    spacing: { before: 0, after: 0 },
+                    children: [
+                      new TextRun({
+                        text: String(marker),
+                        font: "Arial",
+                        size: 10,
+                        color: "666666",
+                      }),
+                    ],
+                  })
+                );
+              }
+
+              return new TableCell({
+                width: { size: 360, type: WidthType.DXA },
+                verticalAlign: VerticalAlign.CENTER,
+                borders: {
+                  top: border,
+                  bottom: border,
+                  left: border,
+                  right: border,
+                },
+                children,
+              });
+            }),
+          })
+      );
+
+      const documentFile = new Document({
+        sections: [
+          {
+            properties: {
+              page: {
+                margin: { top: 720, right: 720, bottom: 720, left: 720 },
+              },
+            },
+            children: [
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                columnWidths: Array(cols).fill(360),
+                rows: tableRows,
+              }),
+            ],
+          },
+        ],
+      });
+
+      const blob = await Packer.toBlob(documentFile);
+      downloadBlob(blob, filename);
+      setSaveMessage("Word 文件已下载");
+    } catch {
+      setSaveMessage("Word 下载失败，请改用 PDF 或下载文本");
+    }
+  };
+
+  const exportPdf = (filename) => {
+    const previousTitle = document.title;
+    const restoreTitle = () => {
+      document.title = previousTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+
+    document.title = filename.replace(/\.pdf$/i, "");
+    window.addEventListener("afterprint", restoreTitle);
+    setSaveMessage("请在打印窗口中选择“保存为 PDF”");
+    window.print();
+  };
+
+  const openFilenameDialog = (type, extension) => {
+    setFilenameInput(getDefaultFilename());
+    setFilenameDialog({ type, extension });
+  };
+
+  const cancelFilenameDialog = () => {
+    setFilenameDialog(null);
+  };
+
+  const submitFilenameDialog = () => {
+    if (!filenameDialog) return;
+
+    const { type, extension } = filenameDialog;
+    const filename = sanitizeFilename(filenameInput, extension);
+    setFilenameDialog(null);
+
+    if (type === "word") {
+      exportWord(filename);
+    } else {
+      exportPdf(filename);
+    }
   };
 
   const copyGrid = () => {
@@ -283,31 +422,73 @@ const App = () => {
         {grid.map((row, rowIndex) => (
           <div className="grid-row" key={rowIndex}>
             {row.map((cell, colIndex) => (
-              <input
+              <div
+                className="grid-cell-wrapper"
                 key={`${rowIndex}-${colIndex}`}
-                data-row={rowIndex}
-                data-col={colIndex}
-                className="grid-cell"
-                value={cell}
-                onChange={(e) => handleInputChange(e, rowIndex, colIndex)}
-                onCompositionStart={handleCompositionStart}
-                onCompositionEnd={(e) =>
-                  handleCompositionEnd(e, rowIndex, colIndex)
-                }
-                onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-                onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-              />
+              >
+                <input
+                  data-row={rowIndex}
+                  data-col={colIndex}
+                  className="grid-cell"
+                  value={cell}
+                  onChange={(e) => handleInputChange(e, rowIndex, colIndex)}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={(e) =>
+                    handleCompositionEnd(e, rowIndex, colIndex)
+                  }
+                  onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                  onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+                />
+                {getCellMarker(rowIndex, colIndex) && (
+                  <span className="char-count-marker" aria-hidden="true">
+                    {getCellMarker(rowIndex, colIndex)}
+                  </span>
+                )}
+              </div>
             ))}
           </div>
         ))}
       </div>
       <div className="buttons">
         <button onClick={saveDraft}>保存草稿</button>
-        <button onClick={downloadText}>下载文本</button>
+        <button onClick={() => openFilenameDialog("word", "docx")}>
+          下载 Word
+        </button>
+        <button onClick={() => openFilenameDialog("pdf", "pdf")}>
+          下载 PDF
+        </button>
         <button onClick={copyGrid}>复制内容</button>
         <button onClick={clearGrid}>清空内容</button>
       </div>
       {saveMessage && <div className="save-message">{saveMessage}</div>}
+      {filenameDialog && (
+        <div className="filename-dialog-backdrop">
+          <div
+            className="filename-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="filename-dialog-title"
+          >
+            <h2 id="filename-dialog-title">输入文件名</h2>
+            <div className="filename-input-row">
+              <input
+                autoFocus
+                value={filenameInput}
+                onChange={(e) => setFilenameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitFilenameDialog();
+                  if (e.key === "Escape") cancelFilenameDialog();
+                }}
+              />
+              <span>.{filenameDialog.extension}</span>
+            </div>
+            <div className="filename-dialog-buttons">
+              <button onClick={cancelFilenameDialog}>取消</button>
+              <button onClick={submitFilenameDialog}>确定下载</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
