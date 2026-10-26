@@ -169,6 +169,48 @@ button:hover {
   background-color: #45a049;
 }
 
+button:disabled {
+  background-color: #bdbdbd;
+  cursor: not-allowed;
+}
+
+.pdf-export-grid {
+  position: absolute;
+  top: 0;
+  left: -100000px;
+  width: 750px;
+  padding: 0;
+  background: #fff;
+  color: #000;
+}
+
+.pdf-export-row {
+  display: flex;
+  width: 750px;
+  height: 30px;
+}
+
+.pdf-export-cell {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 1px solid red;
+  text-align: center;
+  font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 20px;
+  line-height: 28px;
+  background: #fff;
+}
+
+.pdf-export-cell small {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  color: #777;
+  font: 8px/1 Arial, sans-serif;
+}
+
 /* 滚动条优化 */
 .grid::-webkit-scrollbar {
   height: 8px; /* 滚动条高度 */

@@ -12,6 +12,8 @@ import {
   VerticalAlign,
   WidthType,
 } from "docx";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import "./App.css";
 
 const COLS = 25;
@@ -47,16 +49,14 @@ const downloadBlob = (blob, filename) => {
 };
 
 const loadDraft = () => {
-  const fallback = { rows: 8, grid: createEmptyGrid(8), restored: false };
-
   try {
     const rawDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!rawDraft) return fallback;
+    if (!rawDraft) return null;
 
     const draft = JSON.parse(rawDraft);
     const savedRows = Number.parseInt(draft.rows, 10);
     if (!Number.isInteger(savedRows) || savedRows < 1 || !Array.isArray(draft.grid)) {
-      return fallback;
+      return null;
     }
 
     const grid = Array.from({ length: savedRows }, (_, rowIndex) =>
@@ -66,20 +66,20 @@ const loadDraft = () => {
       })
     );
 
-    return { rows: savedRows, grid, restored: true };
+    return { rows: savedRows, grid };
   } catch {
-    return fallback;
+    return null;
   }
 };
 
+const hasSavedDraft = () => loadDraft() !== null;
+
 const App = () => {
-  const [initialDraft] = useState(loadDraft);
   const cols = COLS;
-  const [rows, setRows] = useState(initialDraft.rows);
-  const [grid, setGrid] = useState(initialDraft.grid);
-  const [saveMessage, setSaveMessage] = useState(
-    initialDraft.restored ? "已恢复上次保存的草稿" : ""
-  );
+  const [rows, setRows] = useState(8);
+  const [grid, setGrid] = useState(() => createEmptyGrid(8));
+  const [draftAvailable, setDraftAvailable] = useState(hasSavedDraft);
+  const [saveMessage, setSaveMessage] = useState("");
   const [filenameDialog, setFilenameDialog] = useState(null);
   const [filenameInput, setFilenameInput] = useState("");
 
@@ -269,10 +269,25 @@ const App = () => {
         DRAFT_STORAGE_KEY,
         JSON.stringify({ rows, grid, savedAt: new Date().toISOString() })
       );
+      setDraftAvailable(true);
       setSaveMessage("草稿已保存到当前浏览器");
     } catch {
       setSaveMessage("保存失败，请改用下载文本");
     }
+  };
+
+  const restoreDraft = () => {
+    const savedDraft = loadDraft();
+    if (!savedDraft) {
+      setDraftAvailable(false);
+      setSaveMessage("当前浏览器没有可恢复的草稿");
+      return;
+    }
+
+    setRows(savedDraft.rows);
+    setGrid(savedDraft.grid);
+    setDraftAvailable(true);
+    setSaveMessage("已恢复上次保存的草稿");
   };
 
   const exportWord = async (filename) => {
@@ -359,17 +374,107 @@ const App = () => {
     }
   };
 
-  const exportPdf = (filename) => {
-    const previousTitle = document.title;
-    const restoreTitle = () => {
-      document.title = previousTitle;
-      window.removeEventListener("afterprint", restoreTitle);
+  const exportWebWord = (filename) => {
+    const escapeHtml = (value) =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    const cellHtml = (cell, rowIndex, colIndex) => {
+      const marker = getCellMarker(rowIndex, colIndex);
+      const escapedCell = escapeHtml(cell);
+      return `<td style="width:30px;height:30px;padding:0;border:1px solid red;text-align:center;vertical-align:middle;font-family:'Microsoft YaHei',sans-serif;font-size:16pt;position:relative;"><div style="height:19px;line-height:19px;">${escapedCell || "&nbsp;"}</div>${marker ? `<div style="height:9px;line-height:9px;text-align:right;padding-right:1px;color:#777;font:7pt Arial,sans-serif;">${marker}</div>` : ""}</td>`;
     };
+    const rowsHtml = grid
+      .map(
+        (row, rowIndex) =>
+          `<tr>${row.map((cell, colIndex) => cellHtml(cell, rowIndex, colIndex)).join("")}</tr>`
+      )
+      .join("");
+    const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>申论答题纸</title><style>@page{size:A4 portrait;margin:10mm;}body{margin:0;font-family:'Microsoft YaHei',sans-serif;}table{border-collapse:collapse;table-layout:fixed;}td{mso-border-alt:solid red .5pt;}</style></head><body><table style="width:750px;border-collapse:collapse;table-layout:fixed;">${rowsHtml}</table></body></html>`;
+    downloadBlob(new Blob(["\ufeff", html], { type: "application/msword" }), filename);
+    setSaveMessage("Word 网页文稿已下载");
+  };
 
-    document.title = filename.replace(/\.pdf$/i, "");
-    window.addEventListener("afterprint", restoreTitle);
-    setSaveMessage("请在打印窗口中选择“保存为 PDF”");
-    window.print();
+  const createPdfExportElement = () => {
+    const exportGrid = document.createElement("div");
+    exportGrid.className = "pdf-export-grid";
+
+    grid.forEach((row, rowIndex) => {
+      const exportRow = document.createElement("div");
+      exportRow.className = "pdf-export-row";
+      row.forEach((cell, colIndex) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "pdf-export-cell";
+        const text = document.createElement("span");
+        text.textContent = cell || "";
+        wrapper.appendChild(text);
+        const marker = getCellMarker(rowIndex, colIndex);
+        if (marker) {
+          const markerElement = document.createElement("small");
+          markerElement.textContent = String(marker);
+          wrapper.appendChild(markerElement);
+        }
+        exportRow.appendChild(wrapper);
+      });
+      exportGrid.appendChild(exportRow);
+    });
+
+    document.body.appendChild(exportGrid);
+    return exportGrid;
+  };
+
+  const exportPdf = async (filename) => {
+    let exportGrid;
+    try {
+      setSaveMessage("正在生成 PDF…");
+      exportGrid = createPdfExportElement();
+      const canvas = await html2canvas(exportGrid, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const pageHeightPx = Math.floor((canvas.width * pageHeight) / pageWidth);
+
+      for (let offset = 0, pageIndex = 0; offset < canvas.height; offset += pageHeightPx, pageIndex += 1) {
+        const sliceHeight = Math.min(pageHeightPx, canvas.height - offset);
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+        pageCanvas.getContext("2d").drawImage(
+          canvas,
+          0,
+          offset,
+          canvas.width,
+          sliceHeight,
+          0,
+          0,
+          canvas.width,
+          sliceHeight
+        );
+        if (pageIndex > 0) pdf.addPage();
+        pdf.addImage(
+          pageCanvas.toDataURL("image/png"),
+          "PNG",
+          0,
+          0,
+          pageWidth,
+          (sliceHeight * pageWidth) / canvas.width
+        );
+      }
+
+      pdf.save(filename);
+      setSaveMessage("PDF 文件已直接下载");
+    } catch {
+      setSaveMessage("PDF 下载失败，请重试");
+    } finally {
+      exportGrid?.remove();
+    }
   };
 
   const openFilenameDialog = (type, extension) => {
@@ -390,8 +495,10 @@ const App = () => {
 
     if (type === "word") {
       exportWord(filename);
+    } else if (type === "web-word") {
+      exportWebWord(filename);
     } else {
-      exportPdf(filename);
+      void exportPdf(filename);
     }
   };
 
@@ -451,8 +558,14 @@ const App = () => {
       </div>
       <div className="buttons">
         <button onClick={saveDraft}>保存草稿</button>
+        <button onClick={restoreDraft} disabled={!draftAvailable}>
+          恢复草稿
+        </button>
         <button onClick={() => openFilenameDialog("word", "docx")}>
           下载 Word
+        </button>
+        <button onClick={() => openFilenameDialog("web-word", "doc")}>
+          下载 Word 网页文稿
         </button>
         <button onClick={() => openFilenameDialog("pdf", "pdf")}>
           下载 PDF
