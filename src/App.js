@@ -1,11 +1,45 @@
 import React, { useRef, useState } from "react";
 import "./App.css";
 
+const COLS = 25;
+const DRAFT_STORAGE_KEY = "shenlun-app-draft-v1";
+
+const createEmptyGrid = (rowCount) =>
+  Array.from({ length: rowCount }, () => Array(COLS).fill(""));
+
+const loadDraft = () => {
+  const fallback = { rows: 8, grid: createEmptyGrid(8), restored: false };
+
+  try {
+    const rawDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!rawDraft) return fallback;
+
+    const draft = JSON.parse(rawDraft);
+    const savedRows = Number.parseInt(draft.rows, 10);
+    if (!Number.isInteger(savedRows) || savedRows < 1 || !Array.isArray(draft.grid)) {
+      return fallback;
+    }
+
+    const grid = Array.from({ length: savedRows }, (_, rowIndex) =>
+      Array.from({ length: COLS }, (_, colIndex) => {
+        const value = draft.grid[rowIndex]?.[colIndex];
+        return typeof value === "string" ? value : "";
+      })
+    );
+
+    return { rows: savedRows, grid, restored: true };
+  } catch {
+    return fallback;
+  }
+};
+
 const App = () => {
-  const cols = 25; // 列数保持固定为 25
-  const [rows, setRows] = useState(8); // 初始行数为 8
-  const [grid, setGrid] = useState(
-    Array.from({ length: rows }, () => Array(cols).fill(""))
+  const [initialDraft] = useState(loadDraft);
+  const cols = COLS;
+  const [rows, setRows] = useState(initialDraft.rows);
+  const [grid, setGrid] = useState(initialDraft.grid);
+  const [saveMessage, setSaveMessage] = useState(
+    initialDraft.restored ? "已恢复上次保存的草稿" : ""
   );
 
   // 中文输入法可能一次提交多个字符。用元素引用跟踪组合输入，避免
@@ -182,24 +216,52 @@ const App = () => {
   };
 
   const clearGrid = () => {
-    setGrid(Array.from({ length: rows }, () => Array(cols).fill("")));
+    setGrid(createEmptyGrid(rows));
+  };
+
+  const getGridText = () =>
+    grid.map((row) => row.filter((cell) => cell !== "").join("")).join("\n");
+
+  const saveDraft = () => {
+    try {
+      window.localStorage.setItem(
+        DRAFT_STORAGE_KEY,
+        JSON.stringify({ rows, grid, savedAt: new Date().toISOString() })
+      );
+      setSaveMessage("草稿已保存到当前浏览器");
+    } catch {
+      setSaveMessage("保存失败，请改用下载文本");
+    }
+  };
+
+  const downloadText = () => {
+    const text = getGridText();
+    if (!text.replace(/\n/g, "")) {
+      setSaveMessage("当前没有可保存的内容");
+      return;
+    }
+
+    const blob = new Blob([`${text}\n`], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const date = new Date().toLocaleDateString("zh-CN").replace(/\//g, "-");
+    link.href = url;
+    link.download = `申论答题-${date}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setSaveMessage("文本已下载");
   };
 
   const copyGrid = () => {
-    let text = grid.flat().join("");
+    const text = grid.flat().join("");
     if (text === "" || text === undefined || text == null) {
       return;
     }
-    let answer = "";
-    grid.forEach((element) => {
-      element.forEach((e) => {
-        if (e !== "") {
-          answer += e;
-        }
-      });
-      answer += "\n";
-    });
-    navigator.clipboard.writeText(answer);
+    navigator.clipboard.writeText(getGridText());
   };
 
   return (
@@ -240,9 +302,12 @@ const App = () => {
         ))}
       </div>
       <div className="buttons">
+        <button onClick={saveDraft}>保存草稿</button>
+        <button onClick={downloadText}>下载文本</button>
         <button onClick={copyGrid}>复制内容</button>
         <button onClick={clearGrid}>清空内容</button>
       </div>
+      {saveMessage && <div className="save-message">{saveMessage}</div>}
     </div>
   );
 };

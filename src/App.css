@@ -74,6 +74,15 @@ body {
 /* 按钮样式 */
 .buttons {
   margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.save-message {
+  margin-top: 8px;
+  color: #4caf50;
+  font-size: 14px;
 }
 
 button {
