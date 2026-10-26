@@ -11,10 +11,10 @@ const App = () => {
   // 中文输入法可能一次提交多个字符。用元素引用跟踪组合输入，避免
   // 在 composition 期间提前提交。
   const composingCellRef = useRef(null);
+  const committedCompositionRef = useRef(null);
 
   const isValidInput = (value) =>
-    /^[\u4e00-\u9fa5，！？；。：、‘’“”【】（）]+$/.test(value) ||
-    /^[a-zA-Z0-9]+$/.test(value);
+    value.length > 0 && !/[\r\n]/u.test(value);
 
   const focusCell = (row, col) => {
     const nextCell = document.querySelector(
@@ -76,6 +76,14 @@ const App = () => {
       return;
     }
 
+    // compositionend 后部分浏览器还会补发一次 onChange；组合结果已经
+    // 提交过时跳过这一次，避免空值把刚提交的文字清掉。
+    if (committedCompositionRef.current?.element === e.currentTarget) {
+      committedCompositionRef.current = null;
+      return;
+    }
+
+    committedCompositionRef.current = null;
     commitText(value, row, col);
   };
 
@@ -85,7 +93,18 @@ const App = () => {
 
   const handleCompositionEnd = (e, row, col) => {
     composingCellRef.current = null;
-    commitText(e.currentTarget.value, row, col);
+
+    const value = e.currentTarget.value;
+    const data = e.nativeEvent.data || "";
+    const compositionText =
+      Array.from(data).length >= Array.from(value).length ? data : value;
+
+    if (compositionText !== "") {
+      committedCompositionRef.current = {
+        element: e.currentTarget,
+      };
+      commitText(compositionText, row, col);
+    }
   };
 
   const moveToNextCell = (row, col) => {
