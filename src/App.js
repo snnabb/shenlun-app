@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import "./App.css";
 
 const App = () => {
@@ -8,56 +8,96 @@ const App = () => {
     Array.from({ length: rows }, () => Array(cols).fill(""))
   );
 
-  const [isComposing, setIsComposing] = useState(false);
+  // 中文输入法可能一次提交多个字符。用元素引用跟踪组合输入，避免
+  // 在 composition 期间提前提交，也避免 compositionend 后重复提交。
+  const composingCellRef = useRef(null);
+  const lastCompositionRef = useRef(null);
 
-  const handleInputChange = (e, row, col) => {
-    const value = e.target.value;
+  const isValidInput = (value) =>
+    /^[\u4e00-\u9fa5，！？；。：、‘’“”【】（）]+$/.test(value) ||
+    /^[a-zA-Z0-9]+$/.test(value);
 
-    if (isComposing) {
-      const updatedGrid = [...grid];
-      updatedGrid[row][col] = value;
-      setGrid(updatedGrid);
-      return;
-    }
-
-    if (/^[\u4e00-\u9fa5，！？；。：、‘’“”【】（）]+$/.test(value)) {
-      updateGrid(row, col, value);
-      moveToNextCell(row, col);
-    } else if (/^[a-zA-Z0-9]+$/.test(value)) {
-      updateGrid(row, col, value);
-      moveToNextCell(row, col);
-    } else {
-      const updatedGrid = [...grid];
-      updatedGrid[row][col] = "";
-      setGrid(updatedGrid);
-    }
-  };
-
-  const handleCompositionStart = () => {
-    setIsComposing(true);
-  };
-
-  const handleCompositionEnd = (e, row, col) => {
-    setIsComposing(false);
-
-    const value = e.target.value;
-    if (/^[\u4e00-\u9fa5，！？；。：、‘’“”【】（）]+$/.test(value)) {
-      updateGrid(row, col, value);
-      moveToNextCell(row, col);
-    } else if (/^[a-zA-Z0-9]+$/.test(value)) {
-      updateGrid(row, col, value);
-      moveToNextCell(row, col);
-    } else {
-      const updatedGrid = [...grid];
-      updatedGrid[row][col] = "";
-      setGrid(updatedGrid);
+  const focusCell = (row, col) => {
+    const nextCell = document.querySelector(
+      `[data-row="${row}"][data-col="${col}"]`
+    );
+    if (nextCell) {
+      nextCell.focus();
     }
   };
 
   const updateGrid = (row, col, value) => {
-    const updatedGrid = [...grid];
-    updatedGrid[row][col] = value;
+    setGrid((currentGrid) => {
+      const updatedGrid = currentGrid.map((gridRow) => [...gridRow]);
+      updatedGrid[row][col] = value;
+      return updatedGrid;
+    });
+  };
+
+  const commitText = (value, row, col) => {
+    if (value === "") {
+      updateGrid(row, col, "");
+      return;
+    }
+
+    if (!isValidInput(value)) {
+      updateGrid(row, col, "");
+      return;
+    }
+
+    // 一个格子只保存一个字符；一次提交多个字符时依次填入后续格子。
+    const chars = Array.from(value);
+    const updatedGrid = grid.map((gridRow) => [...gridRow]);
+    let currentRow = row;
+    let currentCol = col;
+
+    for (const char of chars) {
+      if (currentRow >= rows) break;
+
+      updatedGrid[currentRow][currentCol] = char;
+      currentCol += 1;
+
+      if (currentCol >= cols) {
+        currentCol = 0;
+        currentRow += 1;
+      }
+    }
+
     setGrid(updatedGrid);
+    focusCell(currentRow, currentCol);
+  };
+
+  const handleInputChange = (e, row, col) => {
+    const value = e.target.value;
+
+    if (
+      composingCellRef.current === e.currentTarget ||
+      e.nativeEvent.isComposing
+    ) {
+      return;
+    }
+
+    // 某些浏览器会在 compositionend 后再触发一次 onChange。
+    if (lastCompositionRef.current) {
+      const isDuplicateCompositionChange =
+        lastCompositionRef.current === e.currentTarget;
+      lastCompositionRef.current = null;
+      if (isDuplicateCompositionChange) {
+        return;
+      }
+    }
+
+    commitText(value, row, col);
+  };
+
+  const handleCompositionStart = (e) => {
+    composingCellRef.current = e.currentTarget;
+  };
+
+  const handleCompositionEnd = (e, row, col) => {
+    composingCellRef.current = null;
+    lastCompositionRef.current = e.currentTarget;
+    commitText(e.currentTarget.value, row, col);
   };
 
   const moveToNextCell = (row, col) => {
@@ -104,7 +144,7 @@ const App = () => {
     let currentRow = row;
     let currentCol = col;
 
-    const updatedGrid = [...grid];
+    const updatedGrid = grid.map((gridRow) => [...gridRow]);
 
     for (let i = 0; i < cells.length; i++) {
       if (currentRow >= rows) break;
@@ -184,7 +224,6 @@ const App = () => {
                 }
                 onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
                 onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-                maxLength={1}
               />
             ))}
           </div>
