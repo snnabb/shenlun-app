@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/shenlun-app/static/css/main.f4b1965e.css",
-    "main.js": "/shenlun-app/static/js/main.3016bd27.js",
+    "main.css": "/shenlun-app/static/css/main.474661ab.css",
+    "main.js": "/shenlun-app/static/js/main.e1cb9ae8.js",
     "index.html": "/shenlun-app/index.html",
-    "main.f4b1965e.css.map": "/shenlun-app/static/css/main.f4b1965e.css.map",
-    "main.3016bd27.js.map": "/shenlun-app/static/js/main.3016bd27.js.map"
+    "main.474661ab.css.map": "/shenlun-app/static/css/main.474661ab.css.map",
+    "main.e1cb9ae8.js.map": "/shenlun-app/static/js/main.e1cb9ae8.js.map"
   },
   "entrypoints": [
-    "static/css/main.f4b1965e.css",
-    "static/js/main.3016bd27.js"
+    "static/css/main.474661ab.css",
+    "static/js/main.e1cb9ae8.js"
   ]
 }
